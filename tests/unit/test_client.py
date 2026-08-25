@@ -187,3 +187,44 @@ async def test_pagination_rejects_non_list_payload(client) -> None:  # type: ign
     )
     with pytest.raises(GitHubAPIError, match="list"):
         await client.get_paginated("/repos/o/r/issues", max_items=10)
+
+
+# ---------------------------------------------------------------------------
+# Filtered pagination (keep predicate)
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_filtered_pagination_collects_only_matching_entries(client) -> None:  # type: ignore[no-untyped-def]
+    respx.get(f"{BASE_URL}/repos/o/r/issues").mock(
+        side_effect=[
+            httpx.Response(200, json=[{"kind": "pr"}, {"kind": "issue"}]),
+            httpx.Response(200, json=[{"kind": "issue"}, {"kind": "pr"}]),
+        ]
+    )
+    items = await client.get_paginated(
+        "/repos/o/r/issues",
+        max_items=2,
+        per_page=2,
+        keep=lambda item: item["kind"] == "issue",
+    )
+    assert items == [{"kind": "issue"}, {"kind": "issue"}]
+
+
+@respx.mock
+async def test_filtered_pagination_stops_at_scan_ceiling(client) -> None:  # type: ignore[no-untyped-def]
+    route = respx.get(f"{BASE_URL}/repos/o/r/issues").mock(
+        side_effect=[
+            httpx.Response(200, json=[{"kind": "pr"}, {"kind": "pr"}]),
+            httpx.Response(200, json=[{"kind": "pr"}, {"kind": "pr"}]),
+        ]
+    )
+    items = await client.get_paginated(
+        "/repos/o/r/issues",
+        max_items=10,
+        per_page=2,
+        keep=lambda item: item["kind"] == "issue",
+        max_scan=4,
+    )
+    assert items == []  # nothing matched within the scan budget
+    assert route.call_count == 2  # 2 pages x 2 entries == scan ceiling reached

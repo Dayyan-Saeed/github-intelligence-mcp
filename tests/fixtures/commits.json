@@ -1,0 +1,24 @@
+[
+  {
+    "sha": "3f2a1b9c4d5e6f708192a3b4c5d6e7f8091a2b3c",
+    "commit": {
+      "author": { "name": "Andrew Clark", "email": "ac@example.com", "date": "2026-08-18T14:22:00Z" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-08-18T14:22:00Z" },
+      "message": "Fix flaky test in useSyncExternalStore"
+    },
+    "author": { "login": "acdlite" },
+    "committer": null,
+    "html_url": "https://github.com/facebook/react/commit/3f2a1b9c"
+  },
+  {
+    "sha": "aabbccddeeff0011223344556677889900aabbcc",
+    "commit": {
+      "author": { "name": "Jane Doe", "email": "jane@example.com", "date": "2026-08-17T10:00:00Z" },
+      "committer": { "name": "Jane Doe", "email": "jane@example.com", "date": "2026-08-17T10:00:00Z" },
+      "message": "Update docs for hooks"
+    },
+    "author": null,
+    "committer": null,
+    "html_url": "https://github.com/facebook/react/commit/aabbccdd"
+  }
+]

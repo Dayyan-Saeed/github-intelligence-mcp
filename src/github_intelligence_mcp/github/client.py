@@ -9,7 +9,7 @@ transport can be added later without changing call sites.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import TracebackType
@@ -33,6 +33,7 @@ _MAX_ATTEMPTS = 3
 _DEFAULT_BACKOFF_BASE_SECONDS = 0.5
 _BACKOFF_CAP_SECONDS = 4.0
 _DEFAULT_PER_PAGE = 50
+_DEFAULT_MAX_SCAN = 250
 _RATE_LIMIT_STATUSES = frozenset({403, 429})
 
 
@@ -92,22 +93,34 @@ class GitHubClient:
         params: Mapping[str, Any] | None = None,
         max_items: int,
         per_page: int = _DEFAULT_PER_PAGE,
+        keep: Callable[[Any], bool] | None = None,
+        max_scan: int = _DEFAULT_MAX_SCAN,
     ) -> list[Any]:
         """Fetch up to ``max_items`` entries from a list endpoint.
 
         Pagination is bounded by ``max_items`` (callers cap this at 100), so
         unbounded data fetching is impossible by construction.
+
+        When ``keep`` is provided (e.g. to filter PRs out of the issues
+        endpoint), only matching entries count toward ``max_items`` and raw
+        scanning is additionally capped at ``max_scan`` entries so filtered
+        endpoints can never trigger unbounded paging.
         """
         collected: list[Any] = []
         base_query: dict[str, Any] = dict(params or {})
+        scanned = 0
         page = 1
-        while len(collected) < max_items:
-            page_size = min(per_page, max_items - len(collected))
+        while len(collected) < max_items and scanned < max_scan:
+            if keep is None:
+                page_size = min(per_page, max_items - len(collected))
+            else:
+                page_size = min(per_page, max_scan - scanned)
             query = {**base_query, "page": page, "per_page": page_size}
             batch = await self.get_json(path, params=query)
             if not isinstance(batch, list):
                 raise GitHubAPIError(f"Expected a list response from '{path}'.")
-            collected.extend(batch)
+            scanned += len(batch)
+            collected.extend(item for item in batch if keep is None or keep(item))
             if len(batch) < page_size:
                 break
             page += 1

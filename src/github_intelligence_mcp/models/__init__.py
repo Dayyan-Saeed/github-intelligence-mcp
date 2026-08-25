@@ -6,7 +6,10 @@ They are intentionally decoupled from raw GitHub API payload shapes; the
 GitHub changes its API responses.
 """
 
+from github_intelligence_mcp.models.commit import CommitResponse
 from github_intelligence_mcp.models.contributor import ContributorResponse
+from github_intelligence_mcp.models.issue import IssueResponse
+from github_intelligence_mcp.models.pull_request import PullRequestResponse
 from github_intelligence_mcp.models.release import ReleaseResponse
 from github_intelligence_mcp.models.repository import (
     RepositoryResponse,
@@ -15,7 +18,10 @@ from github_intelligence_mcp.models.repository import (
 )
 
 __all__ = [
+    "CommitResponse",
     "ContributorResponse",
+    "IssueResponse",
+    "PullRequestResponse",
     "ReleaseResponse",
     "RepositoryResponse",
     "RepositorySummary",
