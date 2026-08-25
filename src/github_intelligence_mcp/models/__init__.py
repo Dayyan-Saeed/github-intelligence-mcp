@@ -8,6 +8,7 @@ GitHub changes its API responses.
 
 from github_intelligence_mcp.models.commit import CommitResponse
 from github_intelligence_mcp.models.contributor import ContributorResponse
+from github_intelligence_mcp.models.health import ComponentScore, RepositoryHealthResponse
 from github_intelligence_mcp.models.issue import IssueResponse
 from github_intelligence_mcp.models.pull_request import PullRequestResponse
 from github_intelligence_mcp.models.release import ReleaseResponse
@@ -19,10 +20,12 @@ from github_intelligence_mcp.models.repository import (
 
 __all__ = [
     "CommitResponse",
+    "ComponentScore",
     "ContributorResponse",
     "IssueResponse",
     "PullRequestResponse",
     "ReleaseResponse",
+    "RepositoryHealthResponse",
     "RepositoryResponse",
     "RepositorySummary",
     "SearchRepositoriesResponse",

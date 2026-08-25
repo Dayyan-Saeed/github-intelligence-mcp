@@ -63,6 +63,16 @@ class Settings(BaseSettings):
         gt=0,
         description="Default cache TTL in seconds. Reserved for Phase 4.",
     )
+    stale_issue_days: int = Field(
+        default=90,
+        ge=1,
+        description="An open issue untouched for this many days counts as stale.",
+    )
+    stale_pr_days: int = Field(
+        default=30,
+        ge=1,
+        description="An open pull request untouched for this many days counts as stale.",
+    )
 
     @field_validator("log_level")
     @classmethod
