@@ -30,7 +30,7 @@ def compute_activity_score(
     pull_requests_last_30: int,
     releases_last_90: int,
 ) -> tuple[int, dict[str, Any]]:
-    """Combine recent commit/PR/contributor/release signals into 0–100."""
+    """Combine recent commit/PR/contributor/release signals into 0-100."""
     components = [
         capped_ratio(commits_last_30, target=_COMMITS_30_TARGET),
         capped_ratio(commits_last_90, target=_COMMITS_90_TARGET),

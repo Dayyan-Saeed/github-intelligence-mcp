@@ -37,7 +37,7 @@ def compute_release_activity_score(
         1 for r in published if days_between(r.published_at or r.created_at, now) <= 90
     )
     intervals: list[float] = []
-    for older, newer in zip(published[1:], published):
+    for older, newer in zip(published[1:], published, strict=False):
         if older.published_at is not None and newer.published_at is not None:
             intervals.append(days_between(older.published_at, newer.published_at))
     median_interval = median(intervals) if intervals else None

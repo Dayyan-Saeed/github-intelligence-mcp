@@ -5,7 +5,7 @@ Weights follow spec §20 exactly:
     overall = activity*0.25 + issue_health*0.20 + pr_health*0.20
             + contributor_health*0.15 + release_activity*0.10 + documentation*0.10
 
-Every component must independently produce a 0–100 score; grades are a thin,
+Every component must independently produce a 0-100 score; grades are a thin,
 documented mapping over the weighted result.
 """
 

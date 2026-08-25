@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ComponentScore(BaseModel):
     """One scored component of the overall health algorithm.
 
-    ``score`` is an integer in 0–100; ``weight`` is that component's share of
+    ``score`` is an integer in 0-100; ``weight`` is that component's share of
     the overall score (all weights sum to 1.0); ``details`` carries the raw
     evidence so every score is explainable.
     """

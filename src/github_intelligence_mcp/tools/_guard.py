@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -25,10 +24,8 @@ from github_intelligence_mcp.logging import get_logger
 
 _log = get_logger("tools.guard")
 
-T = TypeVar("T")
 
-
-async def guarded_tool_call(
+async def guarded_tool_call[T](
     operation: Callable[[], Awaitable[T]],
     *,
     tool: str,

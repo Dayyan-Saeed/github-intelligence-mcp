@@ -1,6 +1,6 @@
 """Shared deterministic math for health scoring.
 
-Every scorer maps raw signals onto a 0–100 score using saturating ratios:
+Every scorer maps raw signals onto a 0-100 score using saturating ratios:
 ``value`` earns ``score_target`` points per unit until the cap. This keeps
 extremely large repositories from being unfairly favored (a repo with 500
 commits/month scores no better than one with 30) while staying fully

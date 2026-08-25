@@ -119,7 +119,7 @@ def test_activity_score_full_when_targets_met() -> None:
 
 
 def test_activity_score_zero_when_quiet() -> None:
-    score, details = compute_activity_score(
+    score, _ = compute_activity_score(
         commits_last_30=0,
         commits_last_90=0,
         active_contributors_last_30=0,
@@ -216,28 +216,14 @@ def test_pr_health_penalizes_stale_open_prs() -> None:
 
 
 def test_pr_health_merged_prs_do_not_count_as_stale() -> None:
-    merged_long_ago_created = [
-        PullRequestResponse(
-            number=9,
-            title="merged",
-            state="closed",
-            author=None,
-            created_at=NOW - timedelta(days=400),
-            updated_at=NOW - timedelta(days=395),
-            closed_at=NOW - timedelta(days=395),
-            merged_at=NOW - timedelta(days=395),
-            draft=False,
-            labels=[],
-            html_url="x",
-        )
-    ]
     _, details = compute_pr_health_score(
-        open_pull_requests=[],  # merged PRs are not in the open list at all
+        open_pull_requests=[],  # merged PRs never appear in the open list
         merged_last_90=1,
         opened_last_90=1,
         now=NOW,
     )
-    assert "stale_pull_request_count" in details
+    assert details["stale_pull_request_count"] == 0
+    assert details["merged_last_90"] == 1
 
 
 # ---------------------------------------------------------------------------
