@@ -1,79 +1,59 @@
 """MCP tools for repository data.
 
 This is the boundary where MCP meets the GitHub client layer: tool
-implementations validate inputs, invoke domain operations, translate domain
-errors into clean :class:`ToolError` messages, and emit structured logs.
-
-Domain exceptions never escape raw; clients only ever see curated messages.
+implementations invoke domain operations through the shared guard, which
+translates domain errors into clean :class:`ToolError` messages and emits
+structured logs.
 """
 
 from __future__ import annotations
 
-import time
-from typing import Annotated
+from typing import Literal
 
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import Field
 
-from github_intelligence_mcp.errors import (
-    GitHubIntelligenceError,
-    GitHubNotFoundError,
-    ValidationError,
-)
 from github_intelligence_mcp.github.client import GitHubClient
-from github_intelligence_mcp.github.repositories import get_repository as fetch_repository
-from github_intelligence_mcp.logging import get_logger
-from github_intelligence_mcp.models.repository import RepositoryResponse
+from github_intelligence_mcp.github.repositories import (
+    get_repository as fetch_repository,
+)
+from github_intelligence_mcp.github.repositories import (
+    search_repositories as fetch_search_repositories,
+)
+from github_intelligence_mcp.models.repository import (
+    RepositoryResponse,
+    SearchRepositoriesResponse,
+)
+from github_intelligence_mcp.tools._guard import guarded_tool_call
+from github_intelligence_mcp.tools.parameters import OwnerParam, RepoParam
 
-OwnerParam = Annotated[
-    str,
-    Field(
-        min_length=1, max_length=100, description="Repository owner login (user or organization)."
-    ),
-]
-RepoParam = Annotated[
-    str,
-    Field(min_length=1, max_length=100, description="Repository name."),
-]
-
-_log = get_logger("tools.repositories")
+SearchSortParam = Literal["stars", "forks", "help-wanted-issues", "updated"]
+SearchOrderParam = Literal["asc", "desc"]
 
 
 async def get_repository(client: GitHubClient, owner: str, repo: str) -> RepositoryResponse:
     """Tool implementation: structured information about one repository."""
-    started = time.perf_counter()
-    try:
-        result = await fetch_repository(client, owner, repo)
-    except GitHubNotFoundError as exc:
-        _log.warning(
-            "tool=get_repository owner=%s repo=%s status=error reason=not_found",
-            owner,
-            repo,
-        )
-        raise ToolError(f"Repository '{owner}/{repo}' was not found or is inaccessible.") from exc
-    except ValidationError as exc:
-        _log.info(
-            "tool=get_repository owner=%s repo=%s status=error reason=invalid_input", owner, repo
-        )
-        raise ToolError(str(exc)) from exc
-    except GitHubIntelligenceError as exc:
-        _log.warning(
-            "tool=get_repository owner=%s repo=%s status=error reason=%s",
-            owner,
-            repo,
-            type(exc).__name__,
-        )
-        raise ToolError(str(exc)) from exc
-
-    duration_ms = (time.perf_counter() - started) * 1000
-    _log.info(
-        "tool=get_repository owner=%s repo=%s status=success duration_ms=%.1f",
-        owner,
-        repo,
-        duration_ms,
+    return await guarded_tool_call(
+        lambda: fetch_repository(client, owner, repo),
+        tool="get_repository",
+        owner=owner,
+        repo=repo,
+        not_found_message=f"Repository '{owner}/{repo}' was not found or is inaccessible.",
     )
-    return result
+
+
+async def search_repositories(
+    client: GitHubClient,
+    query: str,
+    *,
+    sort: str | None = None,
+    order: str = "desc",
+    limit: int = 30,
+) -> SearchRepositoriesResponse:
+    """Tool implementation: search repositories by query."""
+    return await guarded_tool_call(
+        lambda: fetch_search_repositories(client, query, sort=sort, order=order, limit=limit),
+        tool="search_repositories",
+    )
 
 
 def register_repository_tools(server: MCPServer, client: GitHubClient) -> None:
@@ -90,3 +70,20 @@ def register_repository_tools(server: MCPServer, client: GitHubClient) -> None:
     )
     async def _get_repository(owner: OwnerParam, repo: RepoParam) -> RepositoryResponse:
         return await get_repository(client, owner, repo)
+
+    @server.tool(
+        name="search_repositories",
+        title="Search Repositories",
+        description=(
+            "Search GitHub repositories with a free-form query. Optionally sort "
+            "by stars, forks, help-wanted-issues, or updated time, in ascending "
+            "or descending order. Returns structured repository summaries."
+        ),
+    )
+    async def _search_repositories(
+        query: str,
+        sort: SearchSortParam | None = None,
+        order: SearchOrderParam = "desc",
+        limit: int = 30,
+    ) -> SearchRepositoriesResponse:
+        return await search_repositories(client, query, sort=sort, order=order, limit=limit)

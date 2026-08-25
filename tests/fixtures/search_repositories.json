@@ -1,0 +1,26 @@
+{
+  "total_count": 2,
+  "incomplete_results": false,
+  "items": [
+    {
+      "id": 10270250,
+      "name": "react",
+      "full_name": "facebook/react",
+      "description": "The library for web and native user interfaces.",
+      "stargazers_count": 238000,
+      "forks_count": 49000,
+      "language": "JavaScript",
+      "html_url": "https://github.com/facebook/react"
+    },
+    {
+      "id": 112705422,
+      "name": "vue",
+      "full_name": "vuejs/vue",
+      "description": "This is the repo for Vue 2.",
+      "stargazers_count": 209000,
+      "forks_count": 33700,
+      "language": "TypeScript",
+      "html_url": "https://github.com/vuejs/vue"
+    }
+  ]
+}

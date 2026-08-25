@@ -26,9 +26,8 @@ FIXTURES_DIR = Path(__file__).parents[1] / "fixtures"
 BASE_URL = "https://api.github.test"
 
 
-def _payload() -> dict[str, Any]:
-    raw = (FIXTURES_DIR / "repository.json").read_text(encoding="utf-8")
-    return dict(json.loads(raw))
+def _payload(name: str) -> Any:
+    return json.loads((FIXTURES_DIR / name).read_text(encoding="utf-8"))
 
 
 async def test_get_repository_is_registered(settings) -> None:  # type: ignore[no-untyped-def]
@@ -46,7 +45,7 @@ async def test_get_repository_is_registered(settings) -> None:  # type: ignore[n
 @respx.mock
 async def test_get_repository_returns_structured_data(settings) -> None:  # type: ignore[no-untyped-def]
     respx.get(f"{BASE_URL}/repos/facebook/react").mock(
-        return_value=httpx.Response(200, json=_payload())
+        return_value=httpx.Response(200, json=_payload("repository.json"))
     )
     server = create_server(settings)
 
@@ -103,3 +102,49 @@ async def test_tool_output_never_contains_token(settings) -> None:  # type: igno
         await server.call_tool("get_repository", {"owner": "facebook", "repo": "react"})
 
     assert "test-token-value" not in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# search_repositories
+# ---------------------------------------------------------------------------
+
+
+async def test_search_repositories_is_registered(settings) -> None:  # type: ignore[no-untyped-def]
+    server = create_server(settings)
+    tools = await server.list_tools()
+    names = {tool.name for tool in tools}
+    assert "search_repositories" in names
+
+    tool = next(t for t in tools if t.name == "search_repositories")
+    properties = tool.input_schema["properties"]
+    sort_variants = [
+        {"enum": properties["sort"].get("enum", [])},
+        *properties["sort"].get("anyOf", []),
+    ]
+    sort_values = {value for v in sort_variants for value in v.get("enum", [])}
+    assert sort_values == {"stars", "forks", "help-wanted-issues", "updated"}
+
+
+@respx.mock
+async def test_search_repositories_returns_summaries(settings) -> None:  # type: ignore[no-untyped-def]
+    respx.get(f"{BASE_URL}/search/repositories").mock(
+        return_value=httpx.Response(200, json=_payload("search_repositories.json"))
+    )
+    server = create_server(settings)
+
+    result = await server.call_tool(
+        "search_repositories", {"query": "language:javascript", "limit": 2}
+    )
+
+    assert isinstance(result, CallToolResult)
+    assert not result.is_error
+    text = " ".join(getattr(block, "text", "") or "" for block in result.content)
+    assert "facebook/react" in text
+    assert "vuejs/vue" in text
+
+
+async def test_search_repositories_rejects_bad_sort_via_schema(settings) -> None:  # type: ignore[no-untyped-def]
+    server = create_server(settings)
+
+    with pytest.raises(ToolError, match="search_repositories"):
+        await server.call_tool("search_repositories", {"query": "react", "sort": "cuteness"})

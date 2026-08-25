@@ -42,3 +42,13 @@ def validate_repo(value: str, *, field: str = "repo") -> str:
             field=field,
         )
     return candidate
+
+
+def validate_query(value: str, *, max_length: int = 256) -> str:
+    """Validate a free-form search query (non-blank, length-capped)."""
+    candidate = value.strip()
+    if not candidate:
+        raise ValidationError("query must not be empty.", field="query")
+    if len(candidate) > max_length:
+        raise ValidationError(f"query must be at most {max_length} characters.", field="query")
+    return candidate

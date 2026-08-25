@@ -1,0 +1,24 @@
+[
+  {
+    "login": "gaearon",
+    "id": 810438,
+    "type": "User",
+    "contributions": 1042,
+    "avatar_url": "https://avatars.githubusercontent.com/u/810438?v=4",
+    "html_url": "https://github.com/gaearon"
+  },
+  {
+    "login": "sophiebits",
+    "id": 6820,
+    "type": "User",
+    "contributions": 913,
+    "avatar_url": "https://avatars.githubusercontent.com/u/6820?v=4",
+    "html_url": "https://github.com/sophiebits"
+  },
+  {
+    "name": "Anonymous Contributor",
+    "email": "anon@example.com",
+    "type": "Anonymous",
+    "contributions": 12
+  }
+]

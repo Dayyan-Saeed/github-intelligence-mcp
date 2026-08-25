@@ -3,7 +3,11 @@
 import pytest
 
 from github_intelligence_mcp.errors import ValidationError
-from github_intelligence_mcp.utils.validation import validate_owner, validate_repo
+from github_intelligence_mcp.utils.validation import (
+    validate_owner,
+    validate_query,
+    validate_repo,
+)
 
 
 @pytest.mark.parametrize("value", ["facebook", "a", "A1", "user-name", "0" * 39])
@@ -61,3 +65,18 @@ def test_values_are_stripped() -> None:
 def test_error_names_the_field() -> None:
     with pytest.raises(ValidationError, match="owner"):
         validate_owner("../bad", field="owner")
+
+
+@pytest.mark.parametrize("value", ["language:python stars:>10000", "hello world", "x"])
+def test_valid_queries(value: str) -> None:
+    assert validate_query(value) == value.strip()
+
+
+@pytest.mark.parametrize("value", ["", "   ", "a" * 257])
+def test_invalid_queries(value: str) -> None:
+    with pytest.raises(ValidationError):
+        validate_query(value)
+
+
+def test_query_is_stripped() -> None:
+    assert validate_query("  react  ") == "react"

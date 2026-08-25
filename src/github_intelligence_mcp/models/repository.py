@@ -21,6 +21,16 @@ class RepositorySummary(BaseModel):
     html_url: str
 
 
+class SearchRepositoriesResponse(BaseModel):
+    """Result envelope returned by the ``search_repositories`` tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    total_count: int
+    incomplete_results: bool
+    items: list[RepositorySummary]
+
+
 class RepositoryResponse(BaseModel):
     """Structured repository information returned by the ``get_repository`` tool.
 
