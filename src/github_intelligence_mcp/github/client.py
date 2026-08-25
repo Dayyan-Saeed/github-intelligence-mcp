@@ -60,6 +60,7 @@ class GitHubClient:
         *,
         backoff_base_seconds: float = _DEFAULT_BACKOFF_BASE_SECONDS,
     ) -> None:
+        self._settings = settings
         self._backoff_base_seconds = backoff_base_seconds
         self._rate_limit = RateLimitInfo()
         self._log = get_logger("github.client")
@@ -80,6 +81,16 @@ class GitHubClient:
     def rate_limit(self) -> RateLimitInfo:
         """Most recent rate-limit information observed from GitHub."""
         return self._rate_limit
+
+    @property
+    def stale_issue_days(self) -> int:
+        """Configured staleness threshold for issues."""
+        return self._settings.stale_issue_days
+
+    @property
+    def stale_pr_days(self) -> int:
+        """Configured staleness threshold for pull requests."""
+        return self._settings.stale_pr_days
 
     async def get_json(self, path: str, *, params: Mapping[str, Any] | None = None) -> Any:
         """Perform a GET request and return the decoded JSON body."""

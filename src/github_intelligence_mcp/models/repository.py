@@ -56,3 +56,4 @@ class RepositoryResponse(BaseModel):
     updated_at: datetime
     pushed_at: datetime | None
     html_url: str
+    homepage: str | None = None

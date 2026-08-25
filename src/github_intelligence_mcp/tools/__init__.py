@@ -9,6 +9,7 @@ from collections.abc import Callable
 from mcp.server.mcpserver import MCPServer
 
 from github_intelligence_mcp.github.client import GitHubClient
+from github_intelligence_mcp.tools.analysis import register_analysis_tools
 from github_intelligence_mcp.tools.commits import register_commit_tools
 from github_intelligence_mcp.tools.contributors import register_contributor_tools
 from github_intelligence_mcp.tools.issues import register_issue_tools
@@ -18,7 +19,7 @@ from github_intelligence_mcp.tools.repositories import register_repository_tools
 
 
 def register_all_tools(server: MCPServer, client: GitHubClient) -> None:
-    """Register every MVP tool on the server."""
+    """Register every MVP and analysis tool on the server."""
     registrars: list[Callable[[MCPServer, GitHubClient], None]] = [
         register_repository_tools,
         register_issue_tools,
@@ -26,6 +27,7 @@ def register_all_tools(server: MCPServer, client: GitHubClient) -> None:
         register_commit_tools,
         register_contributor_tools,
         register_release_tools,
+        register_analysis_tools,
     ]
     for registrar in registrars:
         registrar(server, client)

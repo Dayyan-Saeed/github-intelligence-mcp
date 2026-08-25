@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from github_intelligence_mcp.errors import GitHubAPIError, ValidationError
+from github_intelligence_mcp.errors import GitHubAPIError, GitHubNotFoundError, ValidationError
 from github_intelligence_mcp.github.client import GitHubClient
 from github_intelligence_mcp.github.payloads import (
     optional_str,
@@ -68,6 +68,17 @@ async def search_repositories(
     return build_search_response(payload)
 
 
+async def readme_exists(client: GitHubClient, owner: str, repo: str) -> bool:
+    """Return whether the repository has a README (404-safe probe)."""
+    owner = validate_owner(owner)
+    repo = validate_repo(repo)
+    try:
+        await client.get_json(f"/repos/{owner}/{repo}/readme")
+    except GitHubNotFoundError:
+        return False
+    return True
+
+
 def build_repository_response(payload: Mapping[str, Any]) -> RepositoryResponse:
     """Map a raw ``GET /repos/{owner}/{repo}`` payload onto the public model.
 
@@ -96,6 +107,7 @@ def build_repository_response(payload: Mapping[str, Any]) -> RepositoryResponse:
             else None
         ),
         html_url=require_str(payload, "html_url"),
+        homepage=optional_str(payload.get("homepage")),
     )
 
 

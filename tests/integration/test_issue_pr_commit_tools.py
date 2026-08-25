@@ -22,7 +22,7 @@ def _load(name: str) -> list[Any] | dict[str, Any]:
     return value
 
 
-async def test_all_mvp_tools_are_registered(settings) -> None:  # type: ignore[no-untyped-def]
+async def test_all_registered_tools(settings) -> None:  # type: ignore[no-untyped-def]
     server = create_server(settings)
     names = {tool.name for tool in await server.list_tools()}
     expected = {
@@ -33,6 +33,7 @@ async def test_all_mvp_tools_are_registered(settings) -> None:  # type: ignore[n
         "get_recent_commits",
         "get_contributors",
         "get_releases",
+        "analyze_repository",
     }
     assert names == expected
 
