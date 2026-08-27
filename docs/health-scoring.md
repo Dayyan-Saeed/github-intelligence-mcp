@@ -105,3 +105,31 @@ per Phase 1 limits). For very high-volume repositories the sampled window may
 undercount raw totals; evidence fields make the sample sizes visible so
 consumers can judge confidence. This is an accepted MVP trade-off documented
 in the README roadmap (Phase 4 caching widens windows cheaply).
+
+## Maintenance risk detection
+
+The `find_maintenance_risks` tool operates alongside (not inside) the scoring
+engine. It identifies concrete, evidence-backed maintenance risks — each with
+machine-readable evidence so consumers can judge the finding themselves.
+
+Severity is classified **low**, **medium**, or **high**. A risk is a signal;
+concentration findings are phrased as *potential* risks, never as verdicts.
+
+### Risk rules
+
+| Risk type | Severity | Trigger |
+|---|---|---|
+| `stale_issues` | low / medium / high | Open issues not updated within `stale_issue_days`. Low when < 5 stale; medium when ≥ 5; high when ≥ 10 with ≥ 50% share. |
+| `stale_pull_requests` | low / medium / high | Open PRs created > `stale_pr_days` ago and not merged. Low when < 5; medium when ≥ 5; high when ≥ 15. |
+| `inactive_repository` | medium / high | No pushes in ≥ 180 days (medium) or ≥ 365 days (high). |
+| `low_commit_activity` | low / medium | 0 commits in last 30 days (medium) or 1–2 commits (low). |
+| `aging_open_issues` | medium | Average open-issue age ≥ 365 days. |
+| `bus_factor` | medium / high | Only 1 active contributor in 30 days (high) or 2 (medium). |
+| `contributor_concentration` | medium | Most active contributor ≥ 80% of sampled contributions. |
+| `long_release_gap` | medium / high | Last stable release > 365 days ago (medium) or > 730 days (high). |
+| `no_releases` | low | No published releases found in sampled history. |
+
+### Risk aggregation
+
+- **`risk_level`** = highest severity present; `low` when nothing detected.
+- **`risk_score`** = bounded magnitude (high=25, medium=10, low=5 per risk, capped at 100).

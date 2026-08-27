@@ -22,7 +22,7 @@ COMPONENT_NAMES = (
 async def test_analyze_repository_is_registered(settings) -> None:  # type: ignore[no-untyped-def]
     server = create_server(settings)
     names = {tool.name for tool in await server.list_tools()}
-    assert {"analyze_repository", "find_maintenance_risks"} <= names
+    assert {"analyze_repository", "find_maintenance_risks", "compare_repositories"} <= names
 
 
 @respx.mock
@@ -37,6 +37,24 @@ async def test_find_maintenance_risks_returns_report(settings, mock_github) -> N
     assert '"risk_level"' in text.replace("risk_level", '"risk_level"') or "risk_level" in text
     assert "stale_issues" in text  # fixture backlog contains a 200-day-old issue
     assert "evidence" in text
+
+
+@respx.mock
+async def test_compare_repositories_returns_comparison(settings, mock_github) -> None:  # type: ignore[no-untyped-def]
+    server = create_server(settings)
+
+    result = await server.call_tool(
+        "compare_repositories",
+        {"owner_a": "o", "repo_a": "r", "owner_b": "o", "repo_b": "r"},
+    )
+
+    assert isinstance(result, CallToolResult)
+    assert not result.is_error
+    text = " ".join(getattr(block, "text", "") or "" for block in result.content)
+    assert "repo_a" in text
+    assert "repo_b" in text
+    assert "dimensions" in text
+    assert "overall_health" in text
 
 
 async def test_analyze_repository_returns_health_report(settings, mock_github) -> None:  # type: ignore[no-untyped-def]

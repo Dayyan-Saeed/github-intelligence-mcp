@@ -71,3 +71,25 @@ class MaintenanceRiskResponse(BaseModel):
     risk_score: int = Field(ge=0, le=100)
     risks: list[RiskItem]
     computed_at: datetime
+
+
+class ComparisonDimension(BaseModel):
+    """One comparison dimension with both values and a declared winner."""
+
+    model_config = ConfigDict(frozen=True)
+
+    dimension: str
+    repo_a_value: int | float | str
+    repo_b_value: int | float | str
+    winner: Literal["repo_a", "repo_b", "tie"] | None = None
+
+
+class RepositoryComparisonResponse(BaseModel):
+    """Side-by-side health comparison of two repositories."""
+
+    model_config = ConfigDict(frozen=True)
+
+    repo_a: RepositoryHealthResponse
+    repo_b: RepositoryHealthResponse
+    dimensions: list[ComparisonDimension]
+    computed_at: datetime
