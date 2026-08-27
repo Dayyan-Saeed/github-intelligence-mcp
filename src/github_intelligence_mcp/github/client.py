@@ -69,6 +69,7 @@ class GitHubClient:
         self._log = get_logger("github.client")
         self._http = httpx.AsyncClient(
             base_url=settings.github_api_url,
+            follow_redirects=True,
             headers={
                 # SecretStr keeps the token out of logs/reprs; only this
                 # header construction ever touches the raw value.
