@@ -63,6 +63,9 @@ Conventional Commits, one logical change per commit:
 
 ```text
 feat: add get_issues, get_pull_requests, and get_recent_commits tools
+feat: add analyze_repository tool with deterministic health report
+feat: add find_maintenance_risks tool with evidence-backed risk detection
+feat: add compare_repositories tool with side-by-side health comparison
 fix: reject ".." repository names in validation
 docs: record pagination design decisions
 ```

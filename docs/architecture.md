@@ -19,6 +19,13 @@ src/github_intelligence_mcp/
 │   ├── client.py    httpx wrapper: auth, retries, rate limits, pagination
 │   ├── payloads.py  defensive payload access helpers
 │   └── <domain>.py  one service module per domain
+├── analysis/        deterministic scoring and risk detection
+│   ├── scoring.py   shared primitives (capped_ratio, balance_ratio, …)
+│   ├── analyzer.py  snapshot gathering + orchestrator
+│   ├── health.py    overall score aggregation + grade mapping
+│   ├── activity.py, issue_health.py, pr_health.py, …  per-component scorers
+│   ├── risks.py     maintenance risk detection rules
+│   └── comparison.py  side-by-side repository comparison
 ├── models/          stable Pydantic response models (output contract)
 ├── errors/          domain exception hierarchy
 └── utils/validation.py  input allow-list validators
@@ -104,3 +111,20 @@ Config keys exist now (`CACHE_ENABLED`, `CACHE_TTL_SECONDS`) so deployment
 docs don't churn later, but the MVP has no cache layer: correctness first,
 rate-limit pressure is manageable at MVP scale, and premature caching adds
 staleness bugs that would undermine trust in every metric.
+
+### Deterministic scoring with no LLM involvement
+
+Health scores and risk detection are computed entirely in code using explicit
+formulas documented in `docs/health-scoring.md`. The LLM never judges
+repository health — it can call `analyze_repository`, `find_maintenance_risks`,
+and `compare_repositories` to get structured, evidence-backed reports, then
+interpret them for the user. This design ensures reproducibility, testability,
+and immunity to prompt injection or model mood.
+
+### Snapshot → score separation
+
+`AnalysisSnapshot` gathers raw data from the GitHub API once; scoring functions
+and risk detectors consume it without touching the network. This makes the
+scoring engine testable with fabricated snapshots (no API mocking needed for
+unit tests), and allows `compare_repositories` to score two repos in parallel
+with one snapshot-gathering pass each.
