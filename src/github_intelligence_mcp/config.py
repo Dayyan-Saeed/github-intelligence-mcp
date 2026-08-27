@@ -56,12 +56,20 @@ class Settings(BaseSettings):
     )
     cache_enabled: bool = Field(
         default=False,
-        description="Whether response caching is enabled. Reserved for Phase 4.",
+        description="Whether response caching is enabled.",
+    )
+    cache_backend: str = Field(
+        default="memory",
+        description="Cache backend: 'memory' for in-process, 'sqlite' for persistent.",
+    )
+    cache_path: str = Field(
+        default=".cache/github-intelligence.db",
+        description="Filesystem path for the SQLite cache (ignored for memory backend).",
     )
     cache_ttl_seconds: int = Field(
         default=300,
         gt=0,
-        description="Default cache TTL in seconds. Reserved for Phase 4.",
+        description="Default cache TTL in seconds (overridden by per-endpoint defaults).",
     )
     stale_issue_days: int = Field(
         default=90,

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from mcp.server.mcpserver import MCPServer
 
 from github_intelligence_mcp import __version__
+from github_intelligence_mcp.cache import Cache, MemoryCache, NullCache, SQLiteCache
 from github_intelligence_mcp.config import Settings, load_settings
 from github_intelligence_mcp.github.client import GitHubClient
 from github_intelligence_mcp.logging import configure_logging
@@ -41,7 +42,15 @@ def create_server(settings: Settings) -> MCPServer:
     """
     configure_logging(settings.log_level)
 
-    client = GitHubClient(settings)
+    if settings.cache_enabled:
+        if settings.cache_backend == "sqlite":
+            cache: Cache = SQLiteCache(settings.cache_path)
+        else:
+            cache = MemoryCache()
+    else:
+        cache = NullCache()
+
+    client = GitHubClient(settings, cache=cache)
 
     @asynccontextmanager
     async def _lifespan(_: MCPServer) -> AsyncIterator[None]:

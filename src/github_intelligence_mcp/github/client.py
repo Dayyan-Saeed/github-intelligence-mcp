@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 
 from github_intelligence_mcp import __version__
+from github_intelligence_mcp.cache import Cache, NullCache
 from github_intelligence_mcp.config import Settings
 from github_intelligence_mcp.errors import (
     GitHubAPIError,
@@ -59,9 +60,11 @@ class GitHubClient:
         settings: Settings,
         *,
         backoff_base_seconds: float = _DEFAULT_BACKOFF_BASE_SECONDS,
+        cache: Cache | None = None,
     ) -> None:
         self._settings = settings
         self._backoff_base_seconds = backoff_base_seconds
+        self._cache = cache or NullCache()
         self._rate_limit = RateLimitInfo()
         self._log = get_logger("github.client")
         self._http = httpx.AsyncClient(
@@ -94,8 +97,18 @@ class GitHubClient:
 
     async def get_json(self, path: str, *, params: Mapping[str, Any] | None = None) -> Any:
         """Perform a GET request and return the decoded JSON body."""
+        cache_key = self._cache_key(path, params)
+        ttl = self._ttl_for_path(path)
+        if ttl > 0:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                self._log.debug("cache_hit path=%s", path)
+                return cached
         response = await self._send(path, params=params)
-        return response.json()
+        data = response.json()
+        if ttl > 0:
+            self._cache.set(cache_key, data, ttl)
+        return data
 
     async def get_paginated(
         self,
@@ -140,6 +153,8 @@ class GitHubClient:
     async def aclose(self) -> None:
         """Release the underlying HTTP connection pool."""
         await self._http.aclose()
+        if hasattr(self._cache, "close"):
+            self._cache.close()
 
     async def __aenter__(self) -> GitHubClient:
         return self
@@ -151,6 +166,34 @@ class GitHubClient:
         traceback: TracebackType | None,
     ) -> None:
         await self.aclose()
+
+    @staticmethod
+    def _cache_key(path: str, params: Mapping[str, Any] | None) -> str:
+        """Build a cache key from the request path and params."""
+        if not params:
+            return path
+        sorted_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        return f"{path}?{sorted_params}"
+
+    @staticmethod
+    def _ttl_for_path(path: str) -> int:
+        """Determine cache TTL based on the API endpoint path.
+
+        Returns 0 to disable caching for unknown or non-cacheable endpoints.
+        """
+        if "/repos/" not in path:
+            return 0
+        if "/issues" in path and "/pulls" not in path:
+            return 300  # 5 minutes
+        if "/pulls" in path:
+            return 300  # 5 minutes
+        if "/commits" in path:
+            return 120  # 2 minutes
+        if "/contributors" in path:
+            return 600  # 10 minutes
+        if "/releases" in path:
+            return 600  # 10 minutes
+        return 600  # repository metadata: 10 minutes
 
     async def _send(self, path: str, *, params: Mapping[str, Any] | None) -> httpx.Response:
         delay = self._backoff_base_seconds
