@@ -22,7 +22,21 @@ COMPONENT_NAMES = (
 async def test_analyze_repository_is_registered(settings) -> None:  # type: ignore[no-untyped-def]
     server = create_server(settings)
     names = {tool.name for tool in await server.list_tools()}
-    assert "analyze_repository" in names
+    assert {"analyze_repository", "find_maintenance_risks"} <= names
+
+
+@respx.mock
+async def test_find_maintenance_risks_returns_report(settings, mock_github) -> None:  # type: ignore[no-untyped-def]
+    server = create_server(settings)
+
+    result = await server.call_tool("find_maintenance_risks", {"owner": "o", "repo": "r"})
+
+    assert isinstance(result, CallToolResult)
+    assert not result.is_error
+    text = " ".join(getattr(block, "text", "") or "" for block in result.content)
+    assert '"risk_level"' in text.replace("risk_level", '"risk_level"') or "risk_level" in text
+    assert "stale_issues" in text  # fixture backlog contains a 200-day-old issue
+    assert "evidence" in text
 
 
 async def test_analyze_repository_returns_health_report(settings, mock_github) -> None:  # type: ignore[no-untyped-def]

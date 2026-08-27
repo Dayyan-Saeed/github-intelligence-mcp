@@ -12,6 +12,7 @@ sizes are included in component details.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -46,7 +47,13 @@ from github_intelligence_mcp.github.pull_requests import get_pull_requests
 from github_intelligence_mcp.github.releases import get_releases
 from github_intelligence_mcp.github.repositories import get_repository, readme_exists
 from github_intelligence_mcp.logging import get_logger
+from github_intelligence_mcp.models.commit import CommitResponse
+from github_intelligence_mcp.models.contributor import ContributorResponse
 from github_intelligence_mcp.models.health import ComponentScore, RepositoryHealthResponse
+from github_intelligence_mcp.models.issue import IssueResponse
+from github_intelligence_mcp.models.pull_request import PullRequestResponse
+from github_intelligence_mcp.models.release import ReleaseResponse
+from github_intelligence_mcp.models.repository import RepositoryResponse
 from github_intelligence_mcp.utils.validation import validate_owner, validate_repo
 
 _SAMPLE_LIMIT = 100
@@ -54,24 +61,79 @@ _SAMPLE_LIMIT = 100
 _log = get_logger("analysis.analyzer")
 
 
-async def analyze_repository(
+@dataclass(frozen=True)
+class AnalysisSnapshot:
+    """Bounded sample of repository data used by all analysis tools."""
+
+    owner: str
+    repo: str
+    now: datetime
+    metadata: RepositoryResponse
+    has_readme: bool
+    open_issues: list[IssueResponse]
+    closed_issues: list[IssueResponse]
+    open_pulls: list[PullRequestResponse]
+    closed_pulls: list[PullRequestResponse]
+    commits_30: list[CommitResponse]
+    commits_90: list[CommitResponse]
+    contributors: list[ContributorResponse]
+    releases: list[ReleaseResponse]
+
+    @property
+    def created_issues_90(self) -> int:
+        cutoff = self.now - timedelta(days=90)
+        return sum(1 for i in self.open_issues if i.created_at >= cutoff)
+
+    @property
+    def closed_issues_90(self) -> int:
+        cutoff = self.now - timedelta(days=90)
+        return sum(
+            1 for i in self.closed_issues if i.closed_at is not None and i.closed_at >= cutoff
+        )
+
+    @property
+    def opened_prs_30(self) -> int:
+        cutoff = self.now - timedelta(days=30)
+        return sum(1 for pr in self.open_pulls if pr.created_at >= cutoff)
+
+    @property
+    def opened_prs_90(self) -> int:
+        cutoff = self.now - timedelta(days=90)
+        return sum(1 for pr in self.open_pulls if pr.created_at >= cutoff)
+
+    @property
+    def merged_prs_90(self) -> int:
+        cutoff = self.now - timedelta(days=90)
+        return sum(
+            1 for pr in self.closed_pulls if pr.merged_at is not None and pr.merged_at >= cutoff
+        )
+
+    @property
+    def releases_last_90(self) -> int:
+        cutoff = self.now - timedelta(days=90)
+        return sum(
+            1 for r in self.releases if r.published_at is not None and r.published_at >= cutoff
+        )
+
+    @property
+    def active_authors_30(self) -> set[str]:
+        return {c.author for c in self.commits_30 if c.author}
+
+
+async def gather_snapshot(
     client: GitHubClient,
     owner: str,
     repo: str,
     *,
-    stale_issue_days: int = 90,
-    stale_pr_days: int = 30,
     now: datetime | None = None,
-) -> RepositoryHealthResponse:
-    """Compute the full deterministic health assessment for one repository."""
+) -> AnalysisSnapshot:
+    """Fetch the bounded data sample shared by analysis and risk tools."""
     owner = validate_owner(owner)
     repo = validate_repo(repo)
     now = now or datetime.now(UTC)
 
-    _log.info("analyze start owner=%s repo=%s", owner, repo)
     metadata = await get_repository(client, owner, repo)
     has_readme = await readme_exists(client, owner, repo)
-
     open_issues = await get_issues(client, owner, repo, state="open", limit=_SAMPLE_LIMIT)
     closed_issues = await get_issues(
         client, owner, repo, state="closed", sort="updated", limit=_SAMPLE_LIMIT
@@ -85,55 +147,73 @@ async def analyze_repository(
     contributors = await get_contributors(client, owner, repo, limit=_SAMPLE_LIMIT)
     releases = await get_releases(client, owner, repo, limit=_SAMPLE_LIMIT)
 
-    cutoff_90 = now - timedelta(days=90)
-    cutoff_30 = now - timedelta(days=30)
+    return AnalysisSnapshot(
+        owner=owner,
+        repo=repo,
+        now=now,
+        metadata=metadata,
+        has_readme=has_readme,
+        open_issues=open_issues,
+        closed_issues=closed_issues,
+        open_pulls=open_pulls,
+        closed_pulls=closed_pulls,
+        commits_30=commits_30,
+        commits_90=commits_90,
+        contributors=contributors,
+        releases=releases,
+    )
 
-    created_issues_90 = sum(1 for i in open_issues if i.created_at >= cutoff_90)
-    closed_issues_90 = sum(
-        1 for i in closed_issues if i.closed_at is not None and i.closed_at >= cutoff_90
-    )
-    opened_prs_90 = sum(1 for pr in open_pulls if pr.created_at >= cutoff_90)
-    merged_prs_90 = sum(
-        1 for pr in closed_pulls if pr.merged_at is not None and pr.merged_at >= cutoff_90
-    )
-    opened_prs_30 = sum(1 for pr in open_pulls if pr.created_at >= cutoff_30)
-    active_authors_30 = {c.author for c in commits_30 if c.author}
+
+async def analyze_repository(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    *,
+    stale_issue_days: int = 90,
+    stale_pr_days: int = 30,
+    now: datetime | None = None,
+) -> RepositoryHealthResponse:
+    """Compute the full deterministic health assessment for one repository."""
+    snapshot = await gather_snapshot(client, owner, repo, now=now)
+    now = snapshot.now
+
+    _log.info("analyze start owner=%s repo=%s", snapshot.owner, snapshot.repo)
 
     activity_score, activity_details = activity_module.compute_activity_score(
-        commits_last_30=len(commits_30),
-        commits_last_90=len(commits_90),
-        active_contributors_last_30=len(active_authors_30),
-        pull_requests_last_30=opened_prs_30,
-        releases_last_90=sum(
-            1 for r in releases if r.published_at is not None and r.published_at >= cutoff_90
-        ),
+        commits_last_30=len(snapshot.commits_30),
+        commits_last_90=len(snapshot.commits_90),
+        active_contributors_last_30=len(snapshot.active_authors_30),
+        pull_requests_last_30=snapshot.opened_prs_30,
+        releases_last_90=snapshot.releases_last_90,
     )
     issue_score, issue_details = issue_module.compute_issue_health_score(
-        open_issues=open_issues,
-        created_last_90=created_issues_90,
-        closed_last_90=closed_issues_90,
+        open_issues=snapshot.open_issues,
+        created_last_90=snapshot.created_issues_90,
+        closed_last_90=snapshot.closed_issues_90,
         now=now,
         stale_after_days=stale_issue_days,
     )
     pr_score, pr_details = pr_module.compute_pr_health_score(
-        open_pull_requests=open_pulls,
-        merged_last_90=merged_prs_90,
-        opened_last_90=opened_prs_90,
+        open_pull_requests=snapshot.open_pulls,
+        merged_last_90=snapshot.merged_prs_90,
+        opened_last_90=snapshot.opened_prs_90,
         now=now,
         stale_after_days=stale_pr_days,
     )
     contributor_score, contributor_details = contributor_module.compute_contributor_health_score(
-        contributors=contributors,
-        active_contributors_last_30=len(active_authors_30 & {c.username for c in contributors}),
+        contributors=snapshot.contributors,
+        active_contributors_last_30=len(
+            snapshot.active_authors_30 & {c.username for c in snapshot.contributors}
+        ),
     )
     release_score, release_details = release_module.compute_release_activity_score(
-        releases_desc=releases, now=now
+        releases_desc=snapshot.releases, now=now
     )
     documentation_score, documentation_details = documentation_module.compute_documentation_score(
-        has_readme=has_readme,
-        has_license=metadata.license is not None,
-        has_description=bool(metadata.description),
-        has_homepage=bool(metadata.homepage),
+        has_readme=snapshot.has_readme,
+        has_license=snapshot.metadata.license is not None,
+        has_description=bool(snapshot.metadata.description),
+        has_homepage=bool(snapshot.metadata.homepage),
     )
 
     scored: dict[str, tuple[int, str, dict[str, Any]]] = {
@@ -159,14 +239,14 @@ async def analyze_repository(
 
     _log.info(
         "analyze done owner=%s repo=%s overall=%d grade=%s",
-        owner,
-        repo,
+        snapshot.owner,
+        snapshot.repo,
         overall,
         score_to_grade(overall),
     )
     return RepositoryHealthResponse(
-        owner=owner,
-        repo=repo,
+        owner=snapshot.owner,
+        repo=snapshot.repo,
         overall_score=overall,
         grade=score_to_grade(overall),
         components=components,

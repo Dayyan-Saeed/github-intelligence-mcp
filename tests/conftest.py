@@ -11,12 +11,22 @@ import pytest
 import respx
 from pydantic import SecretStr
 
+from github_intelligence_mcp.analysis.analyzer import AnalysisSnapshot
 from github_intelligence_mcp.config import Settings
 from github_intelligence_mcp.github.client import GitHubClient
+from github_intelligence_mcp.github.issues import build_issue_response
+from github_intelligence_mcp.github.pull_requests import build_pull_request_response
+from github_intelligence_mcp.github.repositories import build_repository_response
+from github_intelligence_mcp.models.commit import CommitResponse
+from github_intelligence_mcp.models.contributor import ContributorResponse
+from github_intelligence_mcp.models.release import ReleaseResponse
 
 BASE_URL = "https://api.github.test"
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 NOW = datetime(2026, 8, 25, 12, 0, 0, tzinfo=UTC)
+
+SnapshotOverrides = dict[str, Any]
+AnalysisSnapshotFactory = Any  # refined below via annotation in the fixture
 
 
 def build_settings(**overrides: Any) -> Settings:
@@ -196,3 +206,106 @@ def mock_github() -> Any:
             )
         )
         yield
+
+
+def _commit_model(author: str | None, *, days_ago: int) -> CommitResponse:
+    when = NOW - timedelta(days=days_ago)
+    return CommitResponse(
+        sha=f"sha-{author}-{days_ago}",
+        message="test commit",
+        author=author,
+        author_date=when,
+        committer=author,
+        commit_date=when,
+        html_url="https://github.test/o/r/commit/x",
+    )
+
+
+@pytest.fixture
+def snapshot_factory() -> Any:
+    """Build :class:`AnalysisSnapshot` instances with healthy defaults.
+
+    ``None`` means "keep the healthy default"; pass an explicit list to
+    override. The default snapshot triggers no maintenance risks.
+    """
+
+    def _factory(
+        *,
+        now: datetime | None = None,
+        pushed_days_ago: int = 3,
+        open_issues: list[dict[str, Any]] | None = None,
+        closed_issues: list[dict[str, Any]] | None = None,
+        open_pulls: list[dict[str, Any]] | None = None,
+        closed_pulls: list[dict[str, Any]] | None = None,
+        commits_authors: list[str] | None = None,
+        commits_last_30: list[CommitResponse] | None = None,
+        commits_last_90: list[CommitResponse] | None = None,
+        contributors: list[dict[str, Any]] | None = None,
+        releases: list[dict[str, Any]] | None = None,
+    ) -> AnalysisSnapshot:
+        clock = now or NOW
+        metadata_payload = load_fixture("repository.json")
+        metadata = build_repository_response(metadata_payload)
+        pushed_at = clock - timedelta(days=pushed_days_ago)
+
+        authors = ["alice", "bob", "carol"] if commits_authors is None else commits_authors
+        resolved_commits_30 = (
+            [_commit_model(a, days_ago=5) for a in authors]
+            if commits_last_30 is None
+            else commits_last_30
+        )
+        resolved_commits_90 = (
+            [_commit_model(a, days_ago=40) for a in authors]
+            if commits_last_90 is None
+            else commits_last_90
+        )
+        resolved_contributors = (
+            [
+                contributor_payload("alice", 10),
+                contributor_payload("bob", 10),
+                contributor_payload("carol", 10),
+            ]
+            if contributors is None
+            else contributors
+        )
+        resolved_releases = [release_payload(30, "v1.0")] if releases is None else releases
+
+        return AnalysisSnapshot(
+            owner="o",
+            repo="r",
+            now=clock,
+            metadata=metadata.model_copy(update={"pushed_at": pushed_at}),
+            has_readme=True,
+            open_issues=[build_issue_response(i) for i in (open_issues or [])],
+            closed_issues=[build_issue_response(i) for i in (closed_issues or [])],
+            open_pulls=[build_pull_request_response(p) for p in (open_pulls or [])],
+            closed_pulls=[build_pull_request_response(p) for p in (closed_pulls or [])],
+            commits_30=resolved_commits_30,
+            commits_90=resolved_commits_90,
+            contributors=[
+                ContributorResponse(
+                    username=c["login"],
+                    contributions=c["contributions"],
+                    avatar_url=c["avatar_url"],
+                    html_url=c["html_url"],
+                )
+                for c in resolved_contributors
+            ],
+            releases=[
+                ReleaseResponse(
+                    tag_name=r["tag_name"],
+                    name=r.get("name"),
+                    author=(r.get("author") or {}).get("login"),
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                    published_at=(
+                        datetime.fromisoformat(r["published_at"]) if r.get("published_at") else None
+                    ),
+                    prerelease=r.get("prerelease", False),
+                    draft=r.get("draft", False),
+                    html_url=r["html_url"],
+                )
+                for r in resolved_releases
+            ],
+        )
+
+    return _factory

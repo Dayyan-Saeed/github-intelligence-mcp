@@ -34,6 +34,7 @@ async def test_all_registered_tools(settings) -> None:  # type: ignore[no-untype
         "get_contributors",
         "get_releases",
         "analyze_repository",
+        "find_maintenance_risks",
     }
     assert names == expected
 
