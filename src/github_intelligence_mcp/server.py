@@ -15,6 +15,8 @@ from github_intelligence_mcp import __version__
 from github_intelligence_mcp.config import Settings, load_settings
 from github_intelligence_mcp.github.client import GitHubClient
 from github_intelligence_mcp.logging import configure_logging
+from github_intelligence_mcp.prompts import register_prompts
+from github_intelligence_mcp.resources import register_resources
 from github_intelligence_mcp.tools import register_all_tools
 
 if TYPE_CHECKING:
@@ -55,6 +57,8 @@ def create_server(settings: Settings) -> MCPServer:
         lifespan=_lifespan,
     )
     register_all_tools(server, client)
+    register_resources(server, client)
+    register_prompts(server)
     return server
 
 
