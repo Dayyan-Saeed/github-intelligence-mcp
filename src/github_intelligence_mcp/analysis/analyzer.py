@@ -110,18 +110,53 @@ async def gather_snapshot(
 
     metadata = await get_repository(client, owner, repo)
     has_readme = await readme_exists(client, owner, repo)
-    open_issues = await get_issues(client, owner, repo, state="open", limit=_SAMPLE_LIMIT)
-    closed_issues = await get_issues(
-        client, owner, repo, state="closed", sort="updated", limit=_SAMPLE_LIMIT
-    )
-    open_pulls = await get_pull_requests(client, owner, repo, state="open", limit=_SAMPLE_LIMIT)
-    closed_pulls = await get_pull_requests(
-        client, owner, repo, state="closed", sort="updated", limit=_SAMPLE_LIMIT
-    )
-    commits_30 = await get_recent_commits(client, owner, repo, days=30, limit=_SAMPLE_LIMIT)
-    commits_90 = await get_recent_commits(client, owner, repo, days=90, limit=_SAMPLE_LIMIT)
-    contributors = await get_contributors(client, owner, repo, limit=_SAMPLE_LIMIT)
-    releases = await get_releases(client, owner, repo, limit=_SAMPLE_LIMIT)
+
+    open_issues: list[IssueResponse] = []
+    closed_issues: list[IssueResponse] = []
+    open_pulls: list[PullRequestResponse] = []
+    closed_pulls: list[PullRequestResponse] = []
+    commits_30: list[CommitResponse] = []
+    commits_90: list[CommitResponse] = []
+    contributors: list[ContributorResponse] = []
+    releases_list: list[ReleaseResponse] = []
+
+    for label, coro in [
+        ("open_issues", get_issues(client, owner, repo, state="open", limit=_SAMPLE_LIMIT)),
+        (
+            "closed_issues",
+            get_issues(client, owner, repo, state="closed", sort="updated", limit=_SAMPLE_LIMIT),
+        ),
+        ("open_pulls", get_pull_requests(client, owner, repo, state="open", limit=_SAMPLE_LIMIT)),
+        (
+            "closed_pulls",
+            get_pull_requests(
+                client, owner, repo, state="closed", sort="updated", limit=_SAMPLE_LIMIT
+            ),
+        ),
+        ("commits_30", get_recent_commits(client, owner, repo, days=30, limit=_SAMPLE_LIMIT)),
+        ("commits_90", get_recent_commits(client, owner, repo, days=90, limit=_SAMPLE_LIMIT)),
+        ("contributors", get_contributors(client, owner, repo, limit=_SAMPLE_LIMIT)),
+        ("releases", get_releases(client, owner, repo, limit=_SAMPLE_LIMIT)),
+    ]:
+        try:
+            if label == "open_issues":
+                open_issues = await coro  # type: ignore[assignment]
+            elif label == "closed_issues":
+                closed_issues = await coro  # type: ignore[assignment]
+            elif label == "open_pulls":
+                open_pulls = await coro  # type: ignore[assignment]
+            elif label == "closed_pulls":
+                closed_pulls = await coro  # type: ignore[assignment]
+            elif label == "commits_30":
+                commits_30 = await coro  # type: ignore[assignment]
+            elif label == "commits_90":
+                commits_90 = await coro  # type: ignore[assignment]
+            elif label == "contributors":
+                contributors = await coro  # type: ignore[assignment]
+            elif label == "releases":
+                releases_list = await coro  # type: ignore[assignment]
+        except Exception as exc:
+            _log.warning("gather_snapshot: %s failed for %s/%s: %s", label, owner, repo, exc)
 
     return AnalysisSnapshot(
         owner=owner,
@@ -136,7 +171,7 @@ async def gather_snapshot(
         commits_30=commits_30,
         commits_90=commits_90,
         contributors=contributors,
-        releases=releases,
+        releases=releases_list,
     )
 
 
