@@ -1,5 +1,7 @@
 # GitHub Intelligence MCP
 
+**Live Dashboard:** https://github-intelligence-mcp-ashy.vercel.app/
+
 An intelligent, structured MCP (Model Context Protocol) server for
 investigating and analyzing GitHub repositories.
 
