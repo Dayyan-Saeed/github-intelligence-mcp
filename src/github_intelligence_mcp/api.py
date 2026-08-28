@@ -3,14 +3,18 @@
 Provides HTTP endpoints that call our existing tool functions and return
 JSON. This enables the Next.js dashboard to fetch data without subprocess
 overhead or MCP protocol negotiation.
+
+Includes per-IP rate limiting to protect the GitHub token from abuse.
 """
 
 from __future__ import annotations
 
+import time
+from collections import defaultdict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -35,6 +39,23 @@ from github_intelligence_mcp.models.health import MaintenanceRiskResponse
 
 _client: GitHubClient | None = None
 
+# --- Rate limiting (in-memory, per-IP) ---
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX = 15  # requests per window
+_rate_log: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(ip: str) -> None:
+    now = time.time()
+    cutoff = now - _RATE_LIMIT_WINDOW
+    _rate_log[ip] = [t for t in _rate_log[ip] if t > cutoff]
+    if len(_rate_log[ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Max {_RATE_LIMIT_MAX} requests per minute.",
+        )
+    _rate_log[ip].append(now)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -49,7 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="GitHub Intelligence API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -74,14 +95,16 @@ class CompareParam(BaseModel):
 
 
 @app.get("/api/repository/{owner}/{repo}")
-async def api_get_repository(owner: str, repo: str) -> dict[str, object]:
+async def api_get_repository(owner: str, repo: str, request: Request) -> dict[str, object]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_repository(client, owner, repo)
     return result.model_dump(mode="json")
 
 
 @app.get("/api/repository/{owner}/{repo}/health")
-async def api_analyze_repository(owner: str, repo: str) -> dict[str, object]:
+async def api_analyze_repository(owner: str, repo: str, request: Request) -> dict[str, object]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     snapshot = await gather_snapshot(client, owner, repo)
     health = build_health_response(
@@ -93,7 +116,8 @@ async def api_analyze_repository(owner: str, repo: str) -> dict[str, object]:
 
 
 @app.get("/api/repository/{owner}/{repo}/risks")
-async def api_find_risks(owner: str, repo: str) -> dict[str, object]:
+async def api_find_risks(owner: str, repo: str, request: Request) -> dict[str, object]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     snapshot = await gather_snapshot(client, owner, repo)
     risks = detect_risks(
@@ -113,43 +137,49 @@ async def api_find_risks(owner: str, repo: str) -> dict[str, object]:
 
 
 @app.get("/api/repository/{owner}/{repo}/commits")
-async def api_get_commits(owner: str, repo: str) -> list[dict[str, object]]:
+async def api_get_commits(owner: str, repo: str, request: Request) -> list[dict[str, object]]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_recent_commits(client, owner, repo, limit=20)
     return [c.model_dump(mode="json") for c in result]
 
 
 @app.get("/api/repository/{owner}/{repo}/issues")
-async def api_get_issues(owner: str, repo: str) -> list[dict[str, object]]:
+async def api_get_issues(owner: str, repo: str, request: Request) -> list[dict[str, object]]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_issues(client, owner, repo, state="open", limit=10)
     return [i.model_dump(mode="json") for i in result]
 
 
 @app.get("/api/repository/{owner}/{repo}/pulls")
-async def api_get_pulls(owner: str, repo: str) -> list[dict[str, object]]:
+async def api_get_pulls(owner: str, repo: str, request: Request) -> list[dict[str, object]]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_pull_requests(client, owner, repo, state="open", limit=10)
     return [p.model_dump(mode="json") for p in result]
 
 
 @app.get("/api/repository/{owner}/{repo}/contributors")
-async def api_get_contributors(owner: str, repo: str) -> list[dict[str, object]]:
+async def api_get_contributors(owner: str, repo: str, request: Request) -> list[dict[str, object]]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_contributors(client, owner, repo, limit=10)
     return [c.model_dump(mode="json") for c in result]
 
 
 @app.get("/api/repository/{owner}/{repo}/releases")
-async def api_get_releases(owner: str, repo: str) -> list[dict[str, object]]:
+async def api_get_releases(owner: str, repo: str, request: Request) -> list[dict[str, object]]:
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     result = await get_releases(client, owner, repo, limit=10)
     return [r.model_dump(mode="json") for r in result]
 
 
 @app.get("/api/repository/{owner}/{repo}/investigate")
-async def api_investigate(owner: str, repo: str) -> dict[str, object]:
+async def api_investigate(owner: str, repo: str, request: Request) -> dict[str, object]:
     """Run the full autonomous investigation and return state + report."""
+    _check_rate_limit(request.client.host if request.client else "unknown")
     client = _get_client()
     graph = build_investigation_graph(client)
     state = InvestigationState(owner=owner, repo=repo)
@@ -182,8 +212,12 @@ async def api_investigate(owner: str, repo: str) -> dict[str, object]:
 
 
 @app.get("/api/compare/{owner_a}/{repo_a}/{owner_b}/{repo_b}")
-async def api_compare(owner_a: str, repo_a: str, owner_b: str, repo_b: str) -> dict[str, object]:
+async def api_compare(
+    owner_a: str, repo_a: str, owner_b: str, repo_b: str, request: Request
+) -> dict[str, object]:
     from github_intelligence_mcp.analysis.comparison import compare_snapshots
+
+    _check_rate_limit(request.client.host if request.client else "unknown")
 
     client = _get_client()
     import asyncio
