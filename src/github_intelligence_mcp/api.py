@@ -154,6 +154,19 @@ async def api_investigate(owner: str, repo: str) -> dict[str, object]:
     graph = build_investigation_graph(client)
     state = InvestigationState(owner=owner, repo=repo)
     result = await graph.ainvoke(state)
+    if isinstance(result, dict):
+        return {
+            "owner": result.get("owner", owner),
+            "repo": result.get("repo", repo),
+            "health": result["health"].model_dump(mode="json") if result.get("health") else None,
+            "risks": result["risks"].model_dump(mode="json") if result.get("risks") else None,
+            "recent_commits": [c.model_dump(mode="json") for c in result.get("recent_commits", [])],
+            "open_issues": [i.model_dump(mode="json") for i in result.get("open_issues", [])],
+            "open_pulls": [p.model_dump(mode="json") for p in result.get("open_pulls", [])],
+            "report": result.get("report", ""),
+            "errors": result.get("errors", []),
+            "completed_steps": result.get("completed_steps", []),
+        }
     return {
         "owner": result.owner,
         "repo": result.repo,
