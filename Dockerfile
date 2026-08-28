@@ -28,4 +28,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER app
 
 # The server speaks MCP over stdio; GITHUB_TOKEN is supplied at runtime.
-CMD ["github-intelligence-mcp"]
+CMD ["uvicorn", "github_intelligence_mcp.api:app", "--host", "0.0.0.0", "--port", "8000"]
