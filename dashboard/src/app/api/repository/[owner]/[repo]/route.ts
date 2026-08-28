@@ -91,8 +91,8 @@ export async function GET(
         ? commits.slice(0, 30).map((c: Record<string, unknown>) => ({
             sha: c.sha,
             message: (c.commit as Record<string, unknown>)?.message,
-            author: (c.commit as Record<string, unknown>)?.author?.name,
-            author_date: (c.commit as Record<string, unknown>)?.author?.date,
+            author: ((c.commit as Record<string, unknown>)?.author as Record<string, unknown>)?.name,
+            author_date: ((c.commit as Record<string, unknown>)?.author as Record<string, unknown>)?.date,
             html_url: c.html_url,
           }))
         : [],
